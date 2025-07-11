@@ -1,4 +1,9 @@
 // Direct login endpoint for Vercel
+import { Pool } from '@neondatabase/serverless';
+import bcrypt from 'bcrypt';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,10 +19,6 @@ export default async function handler(req, res) {
   }
   
   try {
-    // Import necessary modules
-    const { storage } = await import('../server/storage.js');
-    const bcrypt = await import('bcrypt');
-    
     // Get request data
     const { username, password } = req.body;
     
@@ -27,10 +28,16 @@ export default async function handler(req, res) {
     }
     
     // Find user
-    const user = await storage.getUserByUsername(username);
-    if (!user) {
+    const userQuery = await pool.query(
+      'SELECT id, username, email, name, role, password, created_at FROM users WHERE username = $1',
+      [username]
+    );
+    
+    if (userQuery.rows.length === 0) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+    
+    const user = userQuery.rows[0];
     
     // Check password
     const isValidPassword = await bcrypt.compare(password, user.password);
@@ -47,8 +54,7 @@ export default async function handler(req, res) {
     console.error('Login error:', error);
     res.status(500).json({ 
       message: 'Login failed',
-      error: error.message,
-      stack: error.stack 
+      error: error.message
     });
   }
 }
