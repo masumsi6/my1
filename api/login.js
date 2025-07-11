@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   try {
     // Dynamic imports for Vercel compatibility
     const { Pool } = await import('@neondatabase/serverless');
-    const bcrypt = await import('bcrypt');
+    const crypto = await import('crypto');
     
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     
@@ -39,8 +39,11 @@ export default async function handler(req, res) {
     
     const user = userQuery.rows[0];
     
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
+    // Check password using crypto (built-in Node.js module)
+    const [hashedPassword, salt] = user.password.split(':');
+    const verifyHash = crypto.scryptSync(password, salt, 64).toString('hex');
+    const isValidPassword = hashedPassword === verifyHash;
+    
     if (!isValidPassword) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
