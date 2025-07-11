@@ -1,4 +1,9 @@
 // Direct registration endpoint for Vercel
+import { Pool } from '@neondatabase/serverless';
+import bcrypt from 'bcrypt';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,11 +19,6 @@ export default async function handler(req, res) {
   }
   
   try {
-    // Import necessary modules
-    const { storage } = await import('../server/storage.js');
-    const { insertUserSchema } = await import('../shared/schema.js');
-    const bcrypt = await import('bcrypt');
-    
     // Get request data
     const { username, email, password, name } = req.body;
     
@@ -28,41 +28,39 @@ export default async function handler(req, res) {
     }
     
     // Check if user already exists
-    const existingUser = await storage.getUserByUsername(username);
-    if (existingUser) {
-      return res.status(400).json({ message: 'Username already exists' });
-    }
+    const existingUserQuery = await pool.query(
+      'SELECT id FROM users WHERE username = $1 OR email = $2',
+      [username, email]
+    );
     
-    const existingEmail = await storage.getUserByEmail(email);
-    if (existingEmail) {
-      return res.status(400).json({ message: 'Email already exists' });
+    if (existingUserQuery.rows.length > 0) {
+      return res.status(400).json({ message: 'Username or email already exists' });
     }
     
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
     
     // Create user
-    const userData = {
-      username,
-      email,
-      password: hashedPassword,
-      name,
-      role: 'user'
-    };
+    const insertResult = await pool.query(
+      'INSERT INTO users (username, email, password, name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, name, role, created_at',
+      [username, email, hashedPassword, name, 'user']
+    );
     
-    const newUser = await storage.createUser(userData);
+    const newUser = insertResult.rows[0];
     
-    // Remove password from response
-    const { password: _, ...userResponse } = newUser;
+    // Create profile for the user
+    await pool.query(
+      'INSERT INTO profiles (user_id, display_name, bio, theme, button_style, button_color, enable_qr_code) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [newUser.id, name, '', 'default', 'rounded', '#000000', true]
+    );
     
-    res.status(201).json(userResponse);
+    res.status(201).json(newUser);
     
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ 
       message: 'Registration failed',
-      error: error.message,
-      stack: error.stack 
+      error: error.message
     });
   }
 }
