@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   try {
     // Dynamic imports for Vercel compatibility
     const { Pool } = await import('@neondatabase/serverless');
-    const bcrypt = await import('bcrypt');
+    const crypto = await import('crypto');
     
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     
@@ -37,8 +37,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Username or email already exists' });
     }
     
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password using crypto (built-in Node.js module)
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hashedPassword = crypto.scryptSync(password, salt, 64).toString('hex') + ':' + salt;
     
     // Create user
     const insertResult = await pool.query(
