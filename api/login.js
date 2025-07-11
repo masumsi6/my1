@@ -1,9 +1,3 @@
-// Direct login endpoint for Vercel
-import { Pool } from '@neondatabase/serverless';
-import bcrypt from 'bcrypt';
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,6 +13,12 @@ export default async function handler(req, res) {
   }
   
   try {
+    // Dynamic imports for Vercel compatibility
+    const { Pool } = await import('@neondatabase/serverless');
+    const bcrypt = await import('bcrypt');
+    
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    
     // Get request data
     const { username, password } = req.body;
     
